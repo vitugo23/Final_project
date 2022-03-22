@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 # <HINT> Import any new Models here
-from .models import Course, Enrollment
+from .models import Course, Enrollment, Question, Choice, Submission, Lesson
 from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
@@ -102,7 +102,40 @@ def enroll(request, course_id):
 
     return HttpResponseRedirect(reverse(viewname='onlinecourse:course_details', args=(course.id,)))
 
+def submit(request, course_id):
+    enrollment = Enrollment.objects.get(user=request.user, course=course_id)
+    submission = Submission.objects.create(enrollment=enrollment)
+    submitted_answers = extract_answers(request)
+    submission.choices.set(submitted_answers)
 
+    return HttpResponseRedirect(reverse(viewname='onlinecourse:show_exam_result', args=(course_id, submission.pk)))
+
+def extract_answers(request):
+    submitted_anwsers = []
+    for key in request.POST:
+        if key.startswith('choice'):
+            value = request.POST[key]
+            choice_id = int(value)
+            submitted_anwsers.append(choice_id)
+    return submitted_anwsers
+
+def show_exam_result(request, course_id, submission_id):
+    context = {}
+    course = get_object_or_404(Course, pk=course_id)
+    submission = get_object_or_404(Submission, pk=submission_id)
+    questions = Question.objects.filter(course=course)
+    total_score = 0
+    points = 0
+    for question in questions:
+        points += question.grade
+        if question.is_get_score(submission.choices.all()):
+            total_score += question.grade
+    
+    grade = int(total_score/points * 100)
+    context['grade'] = grade
+    context['course'] = course
+    context['selected_ids'] = submission.choices.all()
+    return render(request, 'onlinecourse/exam_result_bootstrap.html', context)
 # <HINT> Create a submit view to create an exam submission record for a course enrollment,
 # you may implement it based on following logic:
          # Get user and course object, then get the associated enrollment object created when the user enrolled the course
@@ -131,6 +164,3 @@ def enroll(request, course_id):
         # For each selected choice, check if it is a correct answer or not
         # Calculate the total score
 #def show_exam_result(request, course_id, submission_id):
-
-
-
